@@ -6,7 +6,7 @@ An advanced and modern Learning Management System (LMS) built using the MERN sta
 
 ## 🚀 Demo
 
-> 🔗 [Live Demo](https://e-learning-u1pi.onrender.com/)  
+> 🔗 [Live Demo](https://e-learning-five-kappa.vercel.app/)  
 
 ---
 
