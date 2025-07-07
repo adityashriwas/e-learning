@@ -73,7 +73,7 @@ LMS/
 
 ### Clone the repository:
 ```bash
-https://github.com/adityashriwas/LMS.git
+git clone https://github.com/adityashriwas/e-learning.git
 cd LMS
 ```
 
