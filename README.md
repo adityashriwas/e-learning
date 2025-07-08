@@ -6,7 +6,7 @@ An advanced and modern Learning Management System (LMS) built using the MERN sta
 
 ## 🚀 Demo
 
-> 🔗 [Live Demo](https://e-learning-u1pi.onrender.com/)  
+> 🔗 [Live Demo](https://e-learning-five-kappa.vercel.app/)  
 
 ---
 
@@ -73,7 +73,7 @@ LMS/
 
 ### Clone the repository:
 ```bash
-https://github.com/adityashriwas/LMS.git
+git clone https://github.com/adityashriwas/e-learning.git
 cd LMS
 ```
 
