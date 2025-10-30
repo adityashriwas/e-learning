@@ -72,20 +72,20 @@ export const createCheckoutSession = async (req, res) => {
 export const stripeWebhook = async (req, res) => {
   let event;
 
+  // Stripe sends a signature header which must be used to verify the payload.
+  // The route uses express.raw for the webhook, so `req.body` is the raw Buffer.
+  const signature = req.headers["stripe-signature"];
+  const webhookSecret = process.env.WEBHOOK_ENDPOINT_SECRET;
+
   try {
-    const payloadString = JSON.stringify(req.body, null, 2);
-    const secret = process.env.WEBHOOK_ENDPOINT_SECRET;
-
-    const header = stripe.webhooks.generateTestHeaderString({
-      payload: payloadString,
-      secret,
-    });
-
-    event = stripe.webhooks.constructEvent(payloadString, header, secret);
+    // Use the raw request body (Buffer) and the signature header to construct the event
+    event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
   } catch (error) {
-    console.error("Webhook error:", error.message);
+    console.error("Webhook signature verification failed:", error.message);
     return res.status(400).send(`Webhook error: ${error.message}`);
   }
+
+  console.log("Stripe webhook received:", event.type);
 
   // Handle the checkout session completed event
   if (event.type === "checkout.session.completed") {
@@ -99,6 +99,7 @@ export const stripeWebhook = async (req, res) => {
       }).populate({ path: "courseId" });
 
       if (!purchase) {
+        console.warn("Purchase not found for session id:", session.id);
         return res.status(404).json({ message: "Purchase not found" });
       }
 
@@ -130,6 +131,7 @@ export const stripeWebhook = async (req, res) => {
         { $addToSet: { enrolledStudents: purchase.userId } }, // Add user ID to enrolledStudents
         { new: true }
       );
+      console.log("Purchase processed and enrollment updated for user:", purchase.userId);
     } catch (error) {
       console.error("Error handling event:", error);
       return res.status(500).json({ message: "Internal Server Error" });

@@ -40,15 +40,16 @@ const Dashboard = () => {
   const { purchasedCourse = [] } = purchasedData || {};
 
   // ✅ Filter only those purchases where the logged-in user is the course creator
+  // NOTE: backend returns the purchased course under `courseId` (see CoursePurchase model)
   const mySales = purchasedCourse.filter((item) => {
-  const creatorId = item?.course?.creator;
-  return creatorId?.toString() === userId?.toString();
-});
+    const creatorId = item?.courseId?.creator || item?.course?.creator;
+    return creatorId?.toString() === userId?.toString();
+  });
 
 
   // ✅ Format for chart
   const courseData = mySales.map((item) => ({
-    name: item.course?.courseTitle,
+    name: item.courseId?.courseTitle || item.course?.courseTitle,
     price: item.amount || 0,
   }));
 

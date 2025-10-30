@@ -20,7 +20,11 @@ const CourseDetail = () => {
   const courseId = params.courseId;
   const navigate = useNavigate();
   const { data, isLoading, isError } =
-    useGetCourseDetailWithStatusQuery(courseId);
+    useGetCourseDetailWithStatusQuery(courseId, {
+      // refetch when the window regains focus so enrolled count updates after the webhook runs
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    });
 
   if (isLoading) return <h1>Loading...</h1>;
   if (isError) return <h>Failed to load course details</h>;
