@@ -1,7 +1,8 @@
 import {createApi, fetchBaseQuery} from "@reduxjs/toolkit/query/react";
-import { userLoggedIn, userLoggedOut } from "../authSlice";
+import { setAuthChecked, userLoggedIn, userLoggedOut } from "../authSlice";
+import { API_BASE_URL } from "@/lib/apiBaseUrl";
 
-const USER_API = `${import.meta.env.VITE_BACKEND_URL}/api/v1/user`
+const USER_API = `${API_BASE_URL}/api/v1/user`
 
 export const authApi = createApi({
     reducerPath:"authApi",
@@ -15,7 +16,15 @@ export const authApi = createApi({
                 url:"register",
                 method:"POST",
                 body:inputData
-            })
+            }),
+            async onQueryStarted(_, {queryFulfilled, dispatch}) {
+                try {
+                    const result = await queryFulfilled;
+                    dispatch(userLoggedIn({user:result.data.user}));
+                } catch (error) {
+                    console.log(error);
+                }
+            }
         }),
 
         loginUser: builder.mutation({
@@ -58,7 +67,9 @@ export const authApi = createApi({
                     const result = await queryFulfilled;
                     dispatch(userLoggedIn({user:result.data.user}));
                 } catch (error) {
-                    console.log(error);
+                    dispatch(userLoggedOut());
+                } finally {
+                    dispatch(setAuthChecked());
                 }
             }
         }),

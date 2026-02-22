@@ -164,10 +164,6 @@ const MobileNavbar = ({ user }) => {
           </SheetClose>
 
           <SheetClose asChild>
-            <Link to="/admin/course">My Courses</Link>
-          </SheetClose>
-
-          <SheetClose asChild>
             <p onClick={logoutHandler}>Log out</p>
           </SheetClose>
         </nav>

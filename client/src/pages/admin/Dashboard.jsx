@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLoadUserQuery } from "@/features/api/authApi";
 import { useGetPurchasedCoursesQuery } from "@/features/api/purchaseApi";
 import {
@@ -20,36 +15,24 @@ import {
 const Dashboard = () => {
   const {
     data: purchasedData,
-    isSuccess,
     isError,
     isLoading,
-  } = useGetPurchasedCoursesQuery();
+  } = useGetPurchasedCoursesQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+  });
 
-  const {
-    data: userData,
-    isLoading: userLoading,
-    isError: userError,
-  } = useLoadUserQuery();
-
-  const userId = userData?.user?._id;
+  const { isLoading: userLoading, isError: userError } = useLoadUserQuery();
 
   if (isLoading || userLoading) return <h1>Loading...</h1>;
   if (isError || userError)
     return <h1 className="text-red-500">Failed to load dashboard data</h1>;
 
   const { purchasedCourse = [] } = purchasedData || {};
+  const mySales = purchasedCourse.filter((item) => item?.courseId);
 
-  // ✅ Filter only those purchases where the logged-in user is the course creator
-  // NOTE: backend returns the purchased course under `courseId` (see CoursePurchase model)
-  const mySales = purchasedCourse.filter((item) => {
-    const creatorId = item?.courseId?.creator || item?.course?.creator;
-    return creatorId?.toString() === userId?.toString();
-  });
-
-
-  // ✅ Format for chart
   const courseData = mySales.map((item) => ({
-    name: item.courseId?.courseTitle || item.course?.courseTitle,
+    name: item.courseId.courseTitle,
     price: item.amount || 0,
   }));
 
@@ -72,7 +55,7 @@ const Dashboard = () => {
           <CardTitle>Total Revenue</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-3xl font-bold text-blue-600">₹{totalRevenue}</p>
+          <p className="text-3xl font-bold text-blue-600">INR {totalRevenue}</p>
         </CardContent>
       </Card>
 
@@ -97,7 +80,7 @@ const Dashboard = () => {
                   interval={0}
                 />
                 <YAxis stroke="#6b7280" />
-                <Tooltip formatter={(value, name) => [`₹${value}`, name]} />
+                <Tooltip formatter={(value, name) => [`INR ${value}`, name]} />
                 <Line
                   type="monotone"
                   dataKey="price"

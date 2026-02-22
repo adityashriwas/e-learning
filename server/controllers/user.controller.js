@@ -2,6 +2,7 @@ import { User } from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { deleteMediaFromCloudinary, uploadMedia } from "../utils/cloudinary.js";
+import { getCookieOptions } from "../utils/cookieOptions.js";
 
 export const register = async (req, res) => {
   try {
@@ -12,24 +13,34 @@ export const register = async (req, res) => {
         message: "All fields are required.",
       });
     }
-    const user = await User.findOne({ email });
-    if (user) {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res.status(400).json({
         success: false,
         message: "User already exist with this email.",
       });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    await User.create({
+    const user = await User.create({
       name,
       email,
       role,
       password: hashedPassword,
     });
-    return res.status(201).json({
-      success: true,
-      message: "Account created successfully.",
-    });
+    const userPayload = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      enrolledCourses: user.enrolledCourses || [],
+      photoUrl: user.photoUrl || "",
+    };
+
+    return generateToken(
+      res,
+      userPayload,
+      "Account created successfully."
+    );
   } catch (error) {
     console.log(error);
     return res.status(500).json({
@@ -74,7 +85,8 @@ export const login = async (req, res) => {
 
 export const logout = async (_, res) => {
   try {
-    return res.status(200).cookie("token", "", { maxAge: 0 }).json({
+    const cookieOptions = getCookieOptions();
+    return res.status(200).cookie("token", "", { ...cookieOptions, maxAge: 0 }).json({
       message: "Logged out successfully.",
       success: true,
     });

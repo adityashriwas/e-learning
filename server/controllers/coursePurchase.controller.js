@@ -1,10 +1,47 @@
 import Stripe from "stripe";
 import { Course } from "../models/course.model.js";
 import { CoursePurchase } from "../models/coursePurchase.model.js";
-import { Lecture } from "../models/lecture.model.js";
 import { User } from "../models/user.model.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const resolveFrontendBaseUrl = () => {
+  const explicitBase = process.env.FRONTEND_PUBLIC_URL?.trim();
+  if (explicitBase) return explicitBase.replace(/\/+$/, "");
+
+  const firstOriginFromList = (process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)[0];
+
+  if (firstOriginFromList) return firstOriginFromList.replace(/\/+$/, "");
+  return "http://localhost:5173";
+};
+
+const finalizePurchase = async (purchase, amountTotal) => {
+  if (!purchase) return;
+
+  if (amountTotal) {
+    purchase.amount = amountTotal / 100;
+  }
+
+  if (purchase.status !== "completed") {
+    purchase.status = "completed";
+    await purchase.save();
+  }
+
+  await User.findByIdAndUpdate(
+    purchase.userId,
+    { $addToSet: { enrolledCourses: purchase.courseId._id } },
+    { new: true }
+  );
+
+  await Course.findByIdAndUpdate(
+    purchase.courseId._id,
+    { $addToSet: { enrolledStudents: purchase.userId } },
+    { new: true }
+  );
+};
 
 export const createCheckoutSession = async (req, res) => {
   try {
@@ -21,6 +58,17 @@ export const createCheckoutSession = async (req, res) => {
       amount: course.coursePrice,
       status: "pending",
     });
+
+    const frontendBaseUrl = resolveFrontendBaseUrl();
+    try {
+      new URL(frontendBaseUrl);
+    } catch {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Invalid frontend URL configuration. Set FRONTEND_PUBLIC_URL to a single valid URL.",
+      });
+    }
 
     // Create a Stripe checkout session
     const session = await stripe.checkout.sessions.create({
@@ -39,8 +87,8 @@ export const createCheckoutSession = async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.FRONTEND_URL}/course-progress/${courseId}`, // once payment successful redirect to course progress page
-      cancel_url:  `${process.env.FRONTEND_URL}/course-detail/${courseId}`,
+      success_url: `${frontendBaseUrl}/course-progress/${courseId}?session_id={CHECKOUT_SESSION_ID}`, // once payment successful redirect to course progress page
+      cancel_url:  `${frontendBaseUrl}/course-detail/${courseId}`,
       metadata: {
         courseId: courseId,
         userId: userId,
@@ -66,6 +114,77 @@ export const createCheckoutSession = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to create checkout session",
+    });
+  }
+};
+
+export const verifyCheckoutSession = async (req, res) => {
+  try {
+    const userId = req.id;
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID is required",
+      });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Stripe checkout session not found",
+      });
+    }
+
+    if (session.metadata?.userId && session.metadata.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to verify this session",
+      });
+    }
+
+    if (session.payment_status !== "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Payment is not completed yet",
+      });
+    }
+
+    const purchase = await CoursePurchase.findOne({
+      paymentId: session.id,
+    }).populate({ path: "courseId" });
+
+    if (!purchase) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase not found",
+      });
+    }
+
+    if (purchase.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to verify this purchase",
+      });
+    }
+
+    await finalizePurchase(purchase, session.amount_total);
+
+    return res.status(200).json({
+      success: true,
+      message: "Purchase verified and enrollment updated",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify checkout session",
+    });
   }
 };
 
@@ -106,31 +225,7 @@ export const stripeWebhook = async (req, res) => {
       if (session.amount_total) {
         purchase.amount = session.amount_total / 100;
       }
-      purchase.status = "completed";
-
-      // Make all lectures visible by setting `isPreviewFree` to true
-      if (purchase.courseId && purchase.courseId.lectures.length > 0) {
-        await Lecture.updateMany(
-          { _id: { $in: purchase.courseId.lectures } },
-          { $set: { isPreviewFree: true } }
-        );
-      }
-
-      await purchase.save();
-
-      // Update user's enrolledCourses
-      await User.findByIdAndUpdate(
-        purchase.userId,
-        { $addToSet: { enrolledCourses: purchase.courseId._id } }, // Add course ID to enrolledCourses
-        { new: true }
-      );
-
-      // Update course to add user ID to enrolledStudents
-      await Course.findByIdAndUpdate(
-        purchase.courseId._id,
-        { $addToSet: { enrolledStudents: purchase.userId } }, // Add user ID to enrolledStudents
-        { new: true }
-      );
+      await finalizePurchase(purchase, session.amount_total);
       console.log("Purchase processed and enrollment updated for user:", purchase.userId);
     } catch (error) {
       console.error("Error handling event:", error);
@@ -149,32 +244,61 @@ export const getCourseDetailWithPurchaseStatus = async (req, res) => {
       .populate({ path: "creator" })
       .populate({ path: "lectures" });
 
-    const purchased = await CoursePurchase.findOne({ userId, courseId });
+    const purchasedRecord = await CoursePurchase.findOne({
+      userId,
+      courseId,
+      status: "completed",
+    });
     // console.log(purchased);
 
     if (!course) {
       return res.status(404).json({ message: "course not found!" });
     }
 
+    const purchased = !!purchasedRecord;
+    const sanitizedCourse = course.toObject();
+    sanitizedCourse.lectures = sanitizedCourse.lectures.map((lecture) => {
+      if (purchased || lecture.isPreviewFree) return lecture;
+      return { ...lecture, videoUrl: "" };
+    });
+
     return res.status(200).json({
-      course,
-      purchased: !!purchased, // true if purchased, false otherwise
+      course: sanitizedCourse,
+      purchased,
     });
   } catch (error) {
     console.log(error);
   }
 };
 
-export const getAllPurchasedCourse = async (_, res) => {
+export const getAllPurchasedCourse = async (req, res) => {
   try {
-    const purchasedCourse = await CoursePurchase.find({
-      status: "completed",
-    }).populate("courseId");
-    if (!purchasedCourse) {
+    const userId = req.id;
+    const user = await User.findById(userId).select("role");
+    if (!user) {
       return res.status(404).json({
+        message: "User not found",
         purchasedCourse: [],
       });
     }
+
+    let purchasedCourse = [];
+    if (user.role === "instructor") {
+      const instructorSales = await CoursePurchase.find({
+        status: "completed",
+      }).populate({
+        path: "courseId",
+        match: { creator: userId },
+      });
+
+      purchasedCourse = instructorSales.filter((sale) => sale.courseId);
+    } else {
+      purchasedCourse = await CoursePurchase.find({
+        status: "completed",
+        userId,
+      }).populate("courseId");
+    }
+
     return res.status(200).json({
       purchasedCourse,
     });

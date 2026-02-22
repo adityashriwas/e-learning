@@ -21,15 +21,17 @@ const CourseDetail = () => {
   const navigate = useNavigate();
   const { data, isLoading, isError } =
     useGetCourseDetailWithStatusQuery(courseId, {
+      refetchOnMountOrArgChange: true,
       // refetch when the window regains focus so enrolled count updates after the webhook runs
       refetchOnFocus: true,
       refetchOnReconnect: true,
     });
 
   if (isLoading) return <h1>Loading...</h1>;
-  if (isError) return <h>Failed to load course details</h>;
+  if (isError) return <h1>Failed to load course details</h1>;
 
   const { course, purchased } = data;
+  const previewLecture = course?.lectures?.find((lecture) => lecture.videoUrl);
   // console.log(data);
 
   const handleContinueCourse = () => {
@@ -75,7 +77,11 @@ const CourseDetail = () => {
               {course.lectures.map((lecture, idx) => (
                 <div key={idx} className="flex items-center gap-3 text-sm">
                   <span>
-                    {true ? <PlayCircle size={14} /> : <Lock size={14} />}
+                    {purchased || lecture.isPreviewFree ? (
+                      <PlayCircle size={14} />
+                    ) : (
+                      <Lock size={14} />
+                    )}
                   </span>
                   <p>{lecture.lectureTitle}</p>
                 </div>
@@ -90,11 +96,11 @@ const CourseDetail = () => {
                 <ReactPlayer
                   width="100%"
                   height={"100%"}
-                  url={course.lectures[0]?.videoUrl}
+                  url={previewLecture?.videoUrl || ""}
                   controls={true}
                 />
               </div>
-              <h1>{course.lectures[0]?.lectureTitle}</h1>
+              <h1>{previewLecture?.lectureTitle || "No free preview available"}</h1>
               <Separator className="my-2" />
               <h1 className="text-lg md:text-xl font-semibold">{course?.coursePrice}</h1>
             </CardContent>

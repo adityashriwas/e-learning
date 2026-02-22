@@ -6,6 +6,9 @@ import {
   uploadMedia,
 } from "../utils/cloudinary.js";
 
+const isCourseOwner = (course, userId) =>
+  course?.creator?.toString() === userId?.toString();
+
 export const createCourse = async (req, res) => {
   try {
     const { courseTitle, category } = req.body;
@@ -52,6 +55,11 @@ export const editCourse = async (req, res) => {
         message: "Course not found!",
       });
     }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to edit this course.",
+      });
+    }
     let courseThumbnail;
     if (thumbnail) {
       if (course.courseThumbnail) {
@@ -69,7 +77,7 @@ export const editCourse = async (req, res) => {
       category,
       courseLevel,
       coursePrice,
-      courseThumbnail: courseThumbnail?.secure_url,
+      courseThumbnail: courseThumbnail?.secure_url || course.courseThumbnail,
     };
 
     course = await Course.findByIdAndUpdate(courseId, updateData, {
@@ -90,7 +98,7 @@ export const editCourse = async (req, res) => {
 
 export const searchCourse = async (req, res) => {
   try {
-    const { query = "", categories = [], sortByPrice = "" } = req.query;
+    const { query = "", categories = "", sortByPrice = "" } = req.query;
     // console.log(categories);
 
     // create search query
@@ -104,8 +112,15 @@ export const searchCourse = async (req, res) => {
     };
 
     // if categories selected
-    if (categories.length > 0) {
-      searchCriteria.category = { $in: categories };
+    const parsedCategories = Array.isArray(categories)
+      ? categories
+      : categories
+          .split(",")
+          .map((category) => category.trim())
+          .filter(Boolean);
+
+    if (parsedCategories.length > 0) {
+      searchCriteria.category = { $in: parsedCategories };
     }
 
     // define sorting order
@@ -155,14 +170,8 @@ export const getCreatorCourses = async (req, res) => {
   try {
     const userId = req.id;
     const courses = await Course.find({ creator: userId });
-    if (!courses) {
-      return res.status(404).json({
-        courses: [],
-        message: "Course not found",
-      });
-    }
     return res.status(200).json({
-      courses,
+      courses: courses || [],
     });
   } catch (error) {
     console.log(error);
@@ -181,6 +190,11 @@ export const getCourseById = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         message: "Course not found!",
+      });
+    }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to access this course.",
       });
     }
     return res.status(200).json({
@@ -205,14 +219,20 @@ export const createLecture = async (req, res) => {
       });
     }
 
-    // create lecture
-    const lecture = await Lecture.create({ lectureTitle });
-
     const course = await Course.findById(courseId);
-    if (course) {
-      course.lectures.push(lecture._id);
-      await course.save();
+    if (!course) {
+      return res.status(404).json({
+        message: "Course not found!",
+      });
     }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to add lectures to this course.",
+      });
+    }
+    const lecture = await Lecture.create({ lectureTitle });
+    course.lectures.push(lecture._id);
+    await course.save();
 
     return res.status(201).json({
       lecture,
@@ -233,6 +253,11 @@ export const getCourseLecture = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         message: "Course not found",
+      });
+    }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to access these lectures.",
       });
     }
     return res.status(200).json({
@@ -257,6 +282,25 @@ export const editLecture = async (req, res) => {
         message: "Lecture not found!",
       });
     }
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        message: "Course not found!",
+      });
+    }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to edit this lecture.",
+      });
+    }
+    const lectureBelongsToCourse = course.lectures.some(
+      (id) => id.toString() === lectureId.toString()
+    );
+    if (!lectureBelongsToCourse) {
+      return res.status(404).json({
+        message: "Lecture does not belong to this course.",
+      });
+    }
 
     // update lecture
     if (lectureTitle) lecture.lectureTitle = lectureTitle;
@@ -266,12 +310,6 @@ export const editLecture = async (req, res) => {
 
     await lecture.save();
 
-    // Ensure the course still has the lecture id if it was not aleardy added;
-    const course = await Course.findById(courseId);
-    if (course && !course.lectures.includes(lecture._id)) {
-      course.lectures.push(lecture._id);
-      await course.save();
-    }
     return res.status(200).json({
       lecture,
       message: "Lecture updated successfully.",
@@ -287,6 +325,16 @@ export const editLecture = async (req, res) => {
 export const removeLecture = async (req, res) => {
   try {
     const { lectureId } = req.params;
+    const ownerCourse = await Course.findOne({
+      lectures: lectureId,
+      creator: req.id,
+    });
+    if (!ownerCourse) {
+      return res.status(403).json({
+        message: "You are not authorized to remove this lecture.",
+      });
+    }
+
     const lecture = await Lecture.findByIdAndDelete(lectureId);
     if (!lecture) {
       return res.status(404).json({
@@ -318,6 +366,15 @@ export const removeLecture = async (req, res) => {
 export const getLectureById = async (req, res) => {
   try {
     const { lectureId } = req.params;
+    const ownerCourse = await Course.findOne({
+      lectures: lectureId,
+      creator: req.id,
+    });
+    if (!ownerCourse) {
+      return res.status(403).json({
+        message: "You are not authorized to access this lecture.",
+      });
+    }
     const lecture = await Lecture.findById(lectureId);
     if (!lecture) {
       return res.status(404).json({
@@ -346,6 +403,11 @@ export const togglePublishCourse = async (req, res) => {
         message: "Course not found!",
       });
     }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to update this course.",
+      });
+    }
     // publish status based on the query paramter
     course.isPublished = publish === "true";
     await course.save();
@@ -366,14 +428,19 @@ export const removeCourse = async (req, res) => {
   try {
     const courseId = req.params.courseId;
 
-    const course = await Course.findByIdAndDelete(courseId).populate(
-      "lectures"
-    );
+    const course = await Course.findById(courseId).populate("lectures");
     if (!course) {
       return res.status(404).json({
         message: "Course not found!",
       });
     }
+    if (!isCourseOwner(course, req.id)) {
+      return res.status(403).json({
+        message: "You are not authorized to remove this course.",
+      });
+    }
+
+    await Course.findByIdAndDelete(courseId);
 
     if (course.courseThumbnail) {
       const publicId = course.courseThumbnail.split("/").pop().split(".")[0];
@@ -386,7 +453,7 @@ export const removeCourse = async (req, res) => {
         await deleteVideoFromCloudinary(lecture.publicId);
       }
       // Remove lecture from DB
-      await Lecture.findByIdAndDelete(lecture._Id);
+      await Lecture.findByIdAndDelete(lecture._id);
     }
 
     // const lectureArray = course.lectures;

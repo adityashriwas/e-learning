@@ -15,13 +15,14 @@ import {
   useGetLectureByIdQuery,
   useRemoveLectureMutation,
 } from "@/features/api/courseApi";
+import { API_BASE_URL } from "@/lib/apiBaseUrl";
 import axios from "axios";
 import { Loader2 } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-const MEDIA_API = `${import.meta.env.VITE_BACKEND_URL}/api/v1/media`
+const MEDIA_API = `${API_BASE_URL}/api/v1/media`
 
 const LectureTab = () => {
   const [lectureTitle, setLectureTitle] = useState("");
@@ -29,8 +30,8 @@ const LectureTab = () => {
   const [isFree, setIsFree] = useState(false);
   const [mediaProgress, setMediaProgress] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [btnDisable, setBtnDisable] = useState(true);
   const params = useParams();
+  const navigate = useNavigate();
   const { courseId, lectureId } = params;
 
   const { data: lectureData } = useGetLectureByIdQuery(lectureId);
@@ -40,7 +41,11 @@ const LectureTab = () => {
     if (lecture) {
       setLectureTitle(lecture.lectureTitle);
       setIsFree(lecture.isPreviewFree);
-      setUploadVideoInfo(lecture.videoInfo);
+      setUploadVideoInfo(
+        lecture.videoUrl && lecture.publicId
+          ? { videoUrl: lecture.videoUrl, publicId: lecture.publicId }
+          : null
+      );
     }
   }, [lecture]);
 
@@ -60,6 +65,7 @@ const LectureTab = () => {
       setMediaProgress(true);
       try {
         const res = await axios.post(`${MEDIA_API}/upload-video`, formData, {
+          withCredentials: true,
           onUploadProgress: ({ loaded, total }) => {
             setUploadProgress(Math.round((loaded * 100) / total));
           },
@@ -71,7 +77,6 @@ const LectureTab = () => {
             videoUrl: res.data.data.url,
             publicId: res.data.data.public_id,
           });
-          setBtnDisable(false);
           toast.success(res.data.message);
         }
       } catch (error) {
@@ -111,8 +116,9 @@ const LectureTab = () => {
   useEffect(() => {
     if (removeSuccess) {
       toast.success(removeData.message);
+      navigate(`/admin/course/${courseId}/lecture`);
     }
-  }, [removeSuccess]);
+  }, [removeSuccess, navigate, courseId, removeData]);
 
   return (
     <Card>
@@ -125,7 +131,7 @@ const LectureTab = () => {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            disbaled={removeLoading}
+            disabled={removeLoading}
             variant="destructive"
             onClick={removeLectureHandler}
           >

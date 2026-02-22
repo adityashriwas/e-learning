@@ -1,37 +1,45 @@
+import { Suspense, lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "./App.css";
-import Login from "./pages/Login";
-import HeroSection from "./pages/student/HeroSection";
-import MainLayout from "./layout/MainLayout";
-import Courses from "./pages/student/Courses";
-import MyLearning from "./pages/student/MyLearning";
-import Profile from "./pages/student/Profile";
-import Sidebar from "./pages/admin/Sidebar";
-import Dashboard from "./pages/admin/Dashboard";
-import CourseTable from "./pages/admin/course/CourseTable";
-import AddCourse from "./pages/admin/course/AddCourse";
-import EditCourse from "./pages/admin/course/EditCourse";
-import CreateLecture from "./pages/admin/lecture/CreateLecture";
-import EditLecture from "./pages/admin/lecture/EditLecture";
-import CourseDetail from "./pages/student/CourseDetail";
-import CourseProgress from "./pages/student/CourseProgress";
-import SearchPage from "./pages/student/SearchPage";
 import {
   AdminRoute,
   AuthenticatedUser,
   ProtectedRoute,
 } from "./components/ProtectedRoutes";
 import PurchaseCourseProtectedRoute from "./components/PurchaseCourseProtectedRoute";
+import LoadingSpinner from "./components/LoadingSpinner";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { useLoadUserQuery } from "./features/api/authApi";
+
+const Login = lazy(() => import("./pages/Login"));
+const HeroSection = lazy(() => import("./pages/student/HeroSection"));
+const MainLayout = lazy(() => import("./layout/MainLayout"));
+const Courses = lazy(() => import("./pages/student/Courses"));
+const MyLearning = lazy(() => import("./pages/student/MyLearning"));
+const Profile = lazy(() => import("./pages/student/Profile"));
+const Sidebar = lazy(() => import("./pages/admin/Sidebar"));
+const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
+const CourseTable = lazy(() => import("./pages/admin/course/CourseTable"));
+const AddCourse = lazy(() => import("./pages/admin/course/AddCourse"));
+const EditCourse = lazy(() => import("./pages/admin/course/EditCourse"));
+const CreateLecture = lazy(() => import("./pages/admin/lecture/CreateLecture"));
+const EditLecture = lazy(() => import("./pages/admin/lecture/EditLecture"));
+const CourseDetail = lazy(() => import("./pages/student/CourseDetail"));
+const CourseProgress = lazy(() => import("./pages/student/CourseProgress"));
+const SearchPage = lazy(() => import("./pages/student/SearchPage"));
+
+const withSuspense = (node) => (
+  <Suspense fallback={<LoadingSpinner />}>{node}</Suspense>
+);
 
 const appRouter = createBrowserRouter([
   {
     path: "/",
-    element: <MainLayout />,
+    element: withSuspense(<MainLayout />),
     children: [
       {
         path: "/",
-        element: (
+        element: withSuspense(
           <>
             <HeroSection />
             <Courses />
@@ -41,41 +49,25 @@ const appRouter = createBrowserRouter([
       {
         path: "login",
         element: (
-          <AuthenticatedUser>
-            <Login />
-          </AuthenticatedUser>
+          <AuthenticatedUser>{withSuspense(<Login />)}</AuthenticatedUser>
         ),
       },
       {
         path: "my-learning",
-        element: (
-          <ProtectedRoute>
-            <MyLearning />
-          </ProtectedRoute>
-        ),
+        element: <ProtectedRoute>{withSuspense(<MyLearning />)}</ProtectedRoute>,
       },
       {
         path: "profile",
-        element: (
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        ),
+        element: <ProtectedRoute>{withSuspense(<Profile />)}</ProtectedRoute>,
       },
       {
         path: "course/search",
-        element: (
-          <ProtectedRoute>
-            <SearchPage />
-          </ProtectedRoute>
-        ),
+        element: <ProtectedRoute>{withSuspense(<SearchPage />)}</ProtectedRoute>,
       },
       {
         path: "course-detail/:courseId",
         element: (
-          <ProtectedRoute>
-            <CourseDetail />
-          </ProtectedRoute>
+          <ProtectedRoute>{withSuspense(<CourseDetail />)}</ProtectedRoute>
         ),
       },
       {
@@ -83,44 +75,38 @@ const appRouter = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <PurchaseCourseProtectedRoute>
-              <CourseProgress />
+              {withSuspense(<CourseProgress />)}
             </PurchaseCourseProtectedRoute>
           </ProtectedRoute>
         ),
       },
-
-      // admin routes start from here
       {
         path: "admin",
-        element: (
-          <AdminRoute>
-            <Sidebar />
-          </AdminRoute>
-        ),
+        element: <AdminRoute>{withSuspense(<Sidebar />)}</AdminRoute>,
         children: [
           {
             path: "dashboard",
-            element: <Dashboard />,
+            element: withSuspense(<Dashboard />),
           },
           {
             path: "course",
-            element: <CourseTable />,
+            element: withSuspense(<CourseTable />),
           },
           {
             path: "course/create",
-            element: <AddCourse />,
+            element: withSuspense(<AddCourse />),
           },
           {
             path: "course/:courseId",
-            element: <EditCourse />,
+            element: withSuspense(<EditCourse />),
           },
           {
             path: "course/:courseId/lecture",
-            element: <CreateLecture />,
+            element: withSuspense(<CreateLecture />),
           },
           {
             path: "course/:courseId/lecture/:lectureId",
-            element: <EditLecture />,
+            element: withSuspense(<EditLecture />),
           },
         ],
       },
@@ -129,6 +115,8 @@ const appRouter = createBrowserRouter([
 ]);
 
 function App() {
+  useLoadUserQuery();
+
   return (
     <main>
       <ThemeProvider>

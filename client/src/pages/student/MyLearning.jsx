@@ -3,7 +3,10 @@ import Course from "./Course";
 import { useLoadUserQuery } from "@/features/api/authApi";
 
 const MyLearning = () => { 
-  const {data, isLoading} = useLoadUserQuery();
+  const {data, isLoading} = useLoadUserQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+  });
 
   const myLearning = data?.user.enrolledCourses || [];
   return (

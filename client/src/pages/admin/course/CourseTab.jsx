@@ -148,14 +148,12 @@ const CourseTab = () => {
 
   const removeCourseHandler = async () => {
     try {
-      const data = await removeCourse(courseId);
-      // console.log(data);
-
-      toast.message(data.message);
+      const result = await removeCourse(courseId).unwrap();
+      toast.success(result.message || "Course removed successfully.");
+      navigate("/admin/course");
     } catch (error) {
-      console.log(error);
+      toast.error(error?.data?.message || "Failed to remove course");
     }
-    // navigate(`${/admin/course}`);
   };
 
   return (
