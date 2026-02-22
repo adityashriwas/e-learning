@@ -20,6 +20,7 @@ A comprehensive, full-stack Learning Management System built with the MERN stack
 - [Environment Configuration](#-environment-configuration)
 - [API Documentation](#-api-documentation)
 - [Deployment](#-deployment)
+- [Recent Updates](#-recent-updates)
 - [Contributing](#-contributing)
 - [Author](#-author)
 
@@ -254,6 +255,26 @@ stripe login
 stripe listen --forward-to localhost:8080/api/v1/purchase/webhook
 ```
 
+### Additional Server Environment Variables (New)
+
+The following variables were added for safer local/prod switching and runtime hardening:
+
+```env
+# Comma-separated origins allowed for CORS
+FRONTEND_URL=http://localhost:5173,http://127.0.0.1:5173
+
+# Single frontend URL used by Stripe success/cancel redirects
+FRONTEND_PUBLIC_URL=http://localhost:5173
+
+# Cookie behavior (optional overrides)
+COOKIE_SECURE=false
+COOKIE_SAME_SITE=Lax
+
+# Basic in-memory rate-limiter configuration
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=300
+```
+
 ---
 
 ## 📚 API Documentation
@@ -294,6 +315,7 @@ stripe listen --forward-to localhost:8080/api/v1/purchase/webhook
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/purchase/checkout/create-checkout-session` | Create Stripe checkout |
+| POST | `/api/v1/purchase/checkout/session/:sessionId/verify` | Verify Stripe session and finalize enrollment (fallback to webhook) |
 | POST | `/api/v1/purchase/webhook` | Stripe webhook handler |
 | GET | `/api/v1/purchase/course/:id/detail-with-status` | Get course with purchase status |
 | GET | `/api/v1/purchase` | Get all purchased courses |
@@ -306,6 +328,21 @@ stripe listen --forward-to localhost:8080/api/v1/purchase/webhook
 | POST | `/api/v1/progress/:courseId/lecture/:lectureId` | Update lecture progress |
 | POST | `/api/v1/progress/:courseId/complete` | Mark course as complete |
 | POST | `/api/v1/progress/:courseId/incomplete` | Mark course as incomplete |
+
+### Smoke Test Command (New)
+
+Run a quick backend verification after local run/deploy:
+
+```bash
+cd server
+npm run smoke
+```
+
+You can also target a deployed backend:
+
+```bash
+SMOKE_BASE_URL=https://your-api-domain npm run smoke
+```
 
 ---
 
@@ -326,6 +363,36 @@ stripe listen --forward-to localhost:8080/api/v1/purchase/webhook
 4. Configure build and start commands:
    - Build: `npm install`
    - Start: `npm start`
+
+---
+
+## • Recent Updates
+
+This section documents newly added improvements while preserving all existing project docs above.
+
+### Security and Authorization
+- Added stricter course/lecture ownership checks for instructor actions.
+- Fixed sensitive auth response handling by sanitizing user payloads before returning them.
+- Added security headers and basic request rate limiting in backend runtime.
+- Added env-driven cookie policy for local vs production compatibility.
+
+### Purchase Reliability and Enrollment Consistency
+- Added Stripe checkout session verification API:
+  - `POST /api/v1/purchase/checkout/session/:sessionId/verify`
+- Checkout success URL now includes `session_id` and the frontend verifies payment on return.
+- Purchase finalization is now idempotent and shared between webhook + verify flow.
+- This ensures enrolled students count, "My Learning", instructor sales dashboard, and "Continue Course" state update correctly.
+
+### Performance and UX
+- Added route-level lazy loading/code splitting to improve initial page load.
+- Removed duplicate auth bootstrap to reduce startup overhead.
+- Improved auth-route loading behavior to avoid unnecessary full-screen blocking.
+- Fixed responsive issues in instructor mobile layout and footer.
+
+### Developer Experience / Local vs Deploy
+- Added `client/.env.example` and `server/.env.example`.
+- Added dynamic frontend API base URL resolver (env-first with safe defaults).
+- Added backend smoke test script (`npm run smoke`) for quick post-deploy verification.
 
 
 ---
